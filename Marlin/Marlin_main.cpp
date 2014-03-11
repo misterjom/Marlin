@@ -2,7 +2,7 @@
 
 /*
     Reprap firmware based on Sprinter and grbl.
- Copyright (C) 2012 Camiel Gubbels / Erik van der Zalm
+ Copyright (C) 2011 Camiel Gubbels / Erik van der Zalm
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -997,8 +997,7 @@ static float probe_pt(float x, float y, float z_before) {
   engage_z_probe();   // Engage Z Servo endstop if available
   run_z_probe();
   float measured_z = current_position[Z_AXIS];
-  retract_z_probe();
-
+	// !! MOVED SERVO RETRACT TO END OF AUTO BED LEVELING
   SERIAL_PROTOCOLPGM(MSG_BED);
   SERIAL_PROTOCOLPGM(" x: ");
   SERIAL_PROTOCOL(x);
@@ -1077,7 +1076,7 @@ static void homeaxis(int axis) {
     endstops_hit_on_purpose();
     axis_known_position[axis] = true;
 
-    // Retract Servo endstop if enabled
+    /* Retract Servo endstop if enabled !! MOVED UP TO G28
     #ifdef SERVO_ENDSTOPS
       if (servo_endstops[axis] > -1) {
         servos[servo_endstops[axis]].write(servo_endstop_angles[axis * 2 + 1]);
@@ -1086,7 +1085,7 @@ static void homeaxis(int axis) {
 #if defined (ENABLE_AUTO_BED_LEVELING) && (PROBE_SERVO_DEACTIVATION_DELAY > 0)
     if (axis==Z_AXIS) retract_z_probe();
 #endif
-
+*/
   }
 }
 #define HOMEAXIS(LETTER) homeaxis(LETTER##_AXIS)
@@ -1398,6 +1397,15 @@ void process_commands()
       #endif
       plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
 #endif // else DELTA
+      // Move up for servo retraction
+	  
+      if((home_all_axis) || (code_seen(axis_codes[Z_AXIS]))) {
+        do_blocking_move_relative(0,0,Z_RAISE_BEFORE_PROBING);
+      }
+
+      #if defined (ENABLE_AUTO_BED_LEVELING) && (PROBE_SERVO_DEACTIVATION_DELAY > 0)
+        if ((home_all_axis) || (code_seen(axis_codes[Z_AXIS]))) retract_z_probe();
+      #endif
 
       #ifdef ENDSTOPS_ONLY_FOR_HOMING
         enable_endstops(false);
@@ -1550,6 +1558,10 @@ void process_commands()
             apply_rotation_xyz(plan_bed_level_matrix, x_tmp, y_tmp, z_tmp);         //Apply the correction sending the probe offset
             current_position[Z_AXIS] = z_tmp - real_z + current_position[Z_AXIS];   //The difference is added to current position and sent to planner.
             plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
+            // Raise before z probe retract
+            do_blocking_move_relative(0,0,5);
+	    retract_z_probe();
+	    do_blocking_move_relative(0,0,-5);
         }
         break;
 
